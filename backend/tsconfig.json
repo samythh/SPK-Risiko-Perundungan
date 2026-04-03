@@ -1,0 +1,22 @@
+// File: backend/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "rootDir": "./", // PERBAIKAN 1: Kita mundurkan rootDir ke folder utama backend
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false,
+    "types": [
+      "node"
+    ] // PERBAIKAN 2: Memaksa TypeScript memuat kamus Node.js (untuk kata 'process')
+  },
+  // PERBAIKAN 3: Menambahkan folder prisma ke dalam jangkauan radar
+  "include": [
+    "src/**/*",
+    "prisma/**/*"
+  ]
+}
