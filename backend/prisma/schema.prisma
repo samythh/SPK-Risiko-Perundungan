@@ -1,11 +1,11 @@
 // File: backend/prisma/schema.prisma
 
-// 1. PENGATURAN MESIN (Hanya boleh ada satu)
+// 1. PENGATURAN MESIN
 generator client {
   provider = "prisma-client-js"
 }
 
-// 2. KONEKSI DATABASE (Hanya boleh ada satu)
+// 2. KONEKSI DATABASE
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -33,6 +33,10 @@ model Siswa {
   nama      String
   kelas     String
   
+  // PERBAIKAN: Menambahkan relasi ke tabel PenilaianAlternatif
+  // Menandakan 1 siswa bisa memiliki banyak penilaian (C1, C2, C3...)
+  penilaian PenilaianAlternatif[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -46,4 +50,27 @@ model Kriteria {
   bobot     Float    @default(0)
   
   updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// MODEL BARU: TABEL PENILAIAN ALTERNATIF
+// ==========================================
+
+// Menyimpan Bobot Lokal setiap siswa pada masing-masing kriteria
+model PenilaianAlternatif {
+  id            Int      @id @default(autoincrement())
+  kodeKriteria  String   // Contoh: 'C1'
+  siswaId       Int      // ID dari tabel Siswa (Foreign Key)
+  bobotLokal    Float    // Nilai Vektor Prioritas (contoh: 0.4521)
+  
+  // Relasi: Menghubungkan siswaId di tabel ini dengan id di tabel Siswa.
+  // onDelete: Cascade berarti jika Siswa dihapus, nilai penilaiannya ikut terhapus otomatis.
+  siswa         Siswa    @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // KUNCI PENGAMAN: 1 Siswa hanya boleh punya 1 nilai di 1 Kriteria yang sama.
+  // Ini memungkinkan kita menggunakan teknik Upsert (Timpa Data) di Express.js nanti.
+  @@unique([kodeKriteria, siswaId])
 }

@@ -2,13 +2,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { 
+import {
   Box, Typography, Paper, Tabs, Tab, Alert, Button, useTheme,
   Radio, Tooltip, Divider, CircularProgress, Snackbar, Grid,
   TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
-  Chip // PERBAIKAN 1: Menambahkan Chip ke dalam daftar import
+  Chip
 } from '@mui/material';
-import { Save, AssignmentInd, CheckCircle, WarningAmber } from '@mui/icons-material';
+import { AssignmentInd, CheckCircle, WarningAmber } from '@mui/icons-material';
 
 interface Siswa {
   id: number;
@@ -43,9 +43,9 @@ const computeMatrixValue = (rowId: string, colId: string, answers: Record<string
   if (rowId === colId) return 1.0;
   let val = answers[`${rowId}_${colId}`];
   let isInverse = false;
-  
+
   if (!val) { val = answers[`${colId}_${rowId}`]; isInverse = true; }
-  if (!val) return 1.0; 
+  if (!val) return 1.0;
 
   const dir = val.charAt(0);
   const num = parseInt(val.substring(1));
@@ -57,10 +57,11 @@ const computeMatrixValue = (rowId: string, colId: string, answers: Record<string
 
 export default function AhpAlternatifPage() {
   const theme = useTheme();
-  
+
   const [siswaList, setSiswaList] = useState<Siswa[]>([]);
   const [isLoadingSiswa, setIsLoadingSiswa] = useState(true);
   const [activeKriteriaIdx, setActiveKriteriaIdx] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({
     C1: {}, C2: {}, C3: {}, C4: {}, C5: {}
@@ -92,7 +93,7 @@ export default function AhpAlternatifPage() {
   for (let i = 0; i < siswaList.length; i++) {
     for (let j = i + 1; j < siswaList.length; j++) {
       pairs.push({
-        id: `${siswaList[i].id}_${siswaList[j].id}`, 
+        id: `${siswaList[i].id}_${siswaList[j].id}`,
         left: siswaList[i], right: siswaList[j]
       });
     }
@@ -105,6 +106,7 @@ export default function AhpAlternatifPage() {
   const handleRadioChange = (pairId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [currentKriteria]: { ...prev[currentKriteria], [pairId]: value } }));
   };
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveKriteriaIdx(newValue);
   };
@@ -113,7 +115,7 @@ export default function AhpAlternatifPage() {
     if (!isFormComplete || siswaList.length < 2) return null;
 
     const n = siswaList.length;
-    const matrix = siswaList.map(row => 
+    const matrix = siswaList.map(row =>
       siswaList.map(col => computeMatrixValue(row.id.toString(), col.id.toString(), currentAnswers))
     );
 
@@ -133,7 +135,7 @@ export default function AhpAlternatifPage() {
     for (let i = 0; i < n; i++) lambdaMax += colSums[i] * weights[i];
 
     const CI = (lambdaMax - n) / (n - 1) || 0;
-    const RI = RI_TABLE[n] !== undefined ? RI_TABLE[n] : 1.59; 
+    const RI = RI_TABLE[n] !== undefined ? RI_TABLE[n] : 1.59;
     const CR = RI === 0 ? 0 : CI / RI;
 
     return { matrix, colSums, weights, lambdaMax, CI, CR };
@@ -141,8 +143,39 @@ export default function AhpAlternatifPage() {
 
   const isConsistent = ahpResult ? ahpResult.CR <= 0.1 : false;
 
-  const handleSimpanBobotAlternatif = () => {
-    setNotify({ open: true, message: `Penilaian untuk ${currentKriteria} disimpan sementara!`, type: 'success' });
+  // FUNGSI UTAMA: Mengirim bobot lokal siswa ke API Backend
+  const handleSimpanBobotAlternatif = async () => {
+    if (!ahpResult) return;
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        kodeKriteria: currentKriteria,
+        penilaian: siswaList.map((siswa, idx) => ({
+          siswaId: siswa.id,
+          bobotLokal: ahpResult.weights[idx]
+        }))
+      };
+
+      const response = await fetch('http://localhost:8000/api/alternatif/bobot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setNotify({ open: true, message: result.message, type: 'success' });
+      } else {
+        setNotify({ open: true, message: result.message || 'Gagal menyimpan data.', type: 'error' });
+      }
+    } catch (error) {
+      console.error("Error saving alternatif bobot:", error);
+      setNotify({ open: true, message: 'Gagal terhubung ke server Backend.', type: 'error' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoadingSiswa) {
@@ -168,16 +201,16 @@ export default function AhpAlternatifPage() {
       <Typography variant="body1" color="text.secondary" mb={4}>Bandingkan tingkat keparahan/performa antar siswa untuk masing-masing kriteria.</Typography>
 
       <Paper elevation={0} sx={{ borderRadius: '16px', border: '1px solid', borderColor: 'divider', overflow: 'hidden', bgcolor: 'background.paper' }}>
-        
+
         <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' }}>
           <Tabs value={activeKriteriaIdx} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" sx={{ '& .MuiTab-root': { fontWeight: 'bold', py: 2 } }}>
-            {kriteriaDetail.map((k) => <Tab key={k.kode} icon={<AssignmentInd fontSize="small"/>} iconPosition="start" label={`${k.kode} - ${k.nama}`} />)}
+            {kriteriaDetail.map((k) => <Tab key={k.kode} icon={<AssignmentInd fontSize="small" />} iconPosition="start" label={`${k.kode} - ${k.nama}`} />)}
           </Tabs>
         </Box>
 
         <Box sx={{ p: { xs: 2, md: 4 } }}>
           <Alert severity="info" sx={{ mb: 4, borderRadius: 2 }}>
-            Fokus penilaian saat ini: <b>{kriteriaDetail[activeKriteriaIdx].nama}</b>. <br/>
+            Fokus penilaian saat ini: <b>{kriteriaDetail[activeKriteriaIdx].nama}</b>. <br />
             Tentukan siswa mana yang kondisinya lebih menonjol (atau lebih parah) pada kriteria ini.
           </Alert>
 
@@ -216,7 +249,6 @@ export default function AhpAlternatifPage() {
               </Divider>
 
               <Grid container spacing={4}>
-                {/* PERBAIKAN 2: Menggunakan format size={{ xs: 12, md: 7 }} sesuai MUI v6 */}
                 <Grid size={{ xs: 12, md: 7 }}>
                   <Typography variant="h6" fontWeight="bold" mb={2}>Bobot Lokal Siswa</Typography>
                   <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, boxShadow: 'none' }}>
@@ -241,7 +273,6 @@ export default function AhpAlternatifPage() {
                   </TableContainer>
                 </Grid>
 
-                {/* PERBAIKAN 2: Menggunakan format size={{ xs: 12, md: 5 }} */}
                 <Grid size={{ xs: 12, md: 5 }}>
                   <Typography variant="h6" fontWeight="bold" mb={2}>Uji Konsistensi</Typography>
                   <Box sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
@@ -262,7 +293,7 @@ export default function AhpAlternatifPage() {
                       <Typography variant="subtitle2" sx={{ opacity: 0.9 }}>Consistency Ratio (CR)</Typography>
                       <Typography variant="h3" fontWeight="bold" sx={{ my: 1 }}>{(ahpResult.CR * 100).toFixed(2)} %</Typography>
                       <Box display="flex" alignItems="center" justifyContent="center" gap={0.5}>
-                        {isConsistent ? <CheckCircle fontSize="small" /> : <WarningAmber fontSize="small" />} 
+                        {isConsistent ? <CheckCircle fontSize="small" /> : <WarningAmber fontSize="small" />}
                         <Typography variant="caption" fontWeight="bold">{isConsistent ? 'KONSISTEN (CR ≤ 10%)' : 'TIDAK KONSISTEN (CR > 10%)'}</Typography>
                       </Box>
                     </Box>
@@ -279,16 +310,17 @@ export default function AhpAlternatifPage() {
           )}
 
           <Divider sx={{ my: 4 }} />
-          
+
           <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button 
-              variant="contained" 
-              startIcon={<Save />} 
-              onClick={handleSimpanBobotAlternatif} 
-              sx={{ borderRadius: '12px', py: 1.5, px: 3, fontWeight: 'bold' }}
-              disabled={!isFormComplete || !isConsistent}
+            <Button
+              variant="contained"
+              onClick={handleSimpanBobotAlternatif}
+              sx={{ borderRadius: '12px', py: 1.5, px: 3, fontWeight: 'bold', minWidth: 250 }}
+              disabled={!isFormComplete || !isConsistent || isSaving}
             >
-              {isFormComplete ? `Simpan Penilaian ${kriteriaDetail[activeKriteriaIdx].nama}` : `Selesaikan ${pairs.length - Object.keys(currentAnswers).length} Penilaian Lagi`}
+              {isSaving ? <CircularProgress size={24} color="inherit" /> : (
+                isFormComplete ? `Simpan Penilaian ${kriteriaDetail[activeKriteriaIdx].nama}` : `Selesaikan ${pairs.length - Object.keys(currentAnswers).length} Penilaian Lagi`
+              )}
             </Button>
           </Box>
         </Box>
