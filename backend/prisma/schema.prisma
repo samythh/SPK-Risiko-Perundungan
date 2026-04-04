@@ -1,13 +1,19 @@
 // File: backend/prisma/schema.prisma
 
+// 1. PENGATURAN MESIN (Hanya boleh ada satu)
 generator client {
   provider = "prisma-client-js"
 }
 
+// 2. KONEKSI DATABASE (Hanya boleh ada satu)
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL") // Kembali menggunakan cara normal dan stabil
+  url      = env("DATABASE_URL")
 }
+
+// ==========================================
+// KUMPULAN MODEL / TABEL DATABASE
+// ==========================================
 
 // Model Tabel User untuk Login Guru BK
 model User {
@@ -16,14 +22,28 @@ model User {
   password  String
   name      String
   role      String   @default("GURU_BK")
+  
   createdAt DateTime @default(now())
 }
 
-// Model Tabel Kriteria AHP
+// Model Tabel Siswa (Alternatif)
+model Siswa {
+  id        Int      @id @default(autoincrement())
+  nis       String   @unique
+  nama      String
+  kelas     String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Model Tabel Kriteria AHP (Parameter dan Bobot)
 model Kriteria {
-  id      Int     @id @default(autoincrement())
-  kode    String  @unique 
-  nama    String
-  bobot   Float?  
-  tipe    String  
+  id        Int      @id @default(autoincrement())
+  kode      String   @unique
+  nama      String
+  sifat     String   // Cost atau Benefit
+  bobot     Float    @default(0)
+  
+  updatedAt DateTime @updatedAt
 }
